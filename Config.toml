@@ -1,0 +1,22 @@
+# example config
+
+[keys]
+app = [
+     ["k", "up"],
+     ["j", "down"],
+     ["h", "out"],
+     ["l", "in"],
+     ["up", "up"],
+     ["down", "down"],
+     ["left", "out"],
+     ["right", "in"],
+     ["q", "quit"],
+     ["d", "mark"], 
+     ["D", "markall"], 
+     ["a", "unmark"], 
+     ["A", "unmarkall"], 
+     ["C-t", "toggleDotfiles"], 
+     ["M-i", "sortbyinc"], 
+     ["M-u", "sortbydec"], 
+]
+

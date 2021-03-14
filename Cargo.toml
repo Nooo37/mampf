@@ -1,0 +1,12 @@
+[package]
+name = "mampf"
+version = "0.1.0"
+authors = ["Nooo37 <70270606+Nooo37@users.noreply.github.com>"]
+edition = "2018"
+
+[dependencies]
+toml = "0.4.2"
+termion = "1.5.5"
+tui = "0.9.4"
+rand = "0.5.5"
+
