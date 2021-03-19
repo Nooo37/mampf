@@ -11,19 +11,21 @@ app = [
      ["left", "out"],
      ["right", "in"],
      ["q", "quit"],
-     ["d", "mark"], 
-     ["D", "markall"], 
-     ["a", "unmark"], 
-     ["A", "unmarkall"], 
-     ["C-t", "toggleDotfiles"], 
-     ["M-i", "sortbyinc"], 
-     ["M-u", "sortbydec"], 
+     ["d", "mark"],
+     ["D", "markall"],
+     ["a", "unmark"],
+     ["A", "unmarkall"],
+     ["C-t", "toggleDotfiles"],
+     ["M-i", "sortbyinc"],
+     ["M-u", "sortbydec"],
+     ["M-o", "sortbynew"],
 ]
 cmd = [
      ["f2", "trash-put %d/%f"],    # trash-put the currently focused file
      ["C-q", "trash-put %D/%F"],   # trash-put all marked files
      ["C-v", "cp %D/%F %d/"],      # copy all marked files into the current dir
      ["C-m", "mv %D/%F %d/"],      # move all marked files inot the current dir
+     ["M-r", "xdg-open %d/%f"],    # open the current file (currently freezes the app)
 ]
 jmp = [
      ["g", "~"],                   # jumps to the home directory when g is pressed

@@ -12,4 +12,3 @@ homepage = "https://github.com/Nooo37/mampf"
 toml = "0.4.2"
 termion = "1.5.5"
 tui = "0.9.4"
-

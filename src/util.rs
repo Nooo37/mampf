@@ -1,129 +1,6 @@
-use std::path::PathBuf;
-use termion::event::Key;
+use std::{path::PathBuf, time::SystemTime};
 
-use crate::Config;
-use crate::FMState;
-
-// Multiple smaller structs that are used all across the code, are declared here
-
-#[derive(Debug, Clone)]
-pub enum Action {
-    Up,
-    Down,
-    In,
-    Out,
-    Quit,
-    Mark,
-    MarkAll,
-    UnMark,
-    UnMarkAll,
-    Jump(PathBuf),
-    ToggleFilter(Filter),
-    DoSortBy(SortBy),
-    ShellCmd(String),
-}
-
-impl Action {
-    pub fn perform(&self, fm_state: &mut FMState) -> Option<usize> {
-        match self {
-            Action::Up => fm_state.move_up(),
-            Action::Down => fm_state.move_down(),
-            Action::In => fm_state.move_in(),
-            Action::Out => fm_state.move_out(),
-            Action::Mark => fm_state.mark_current(),
-            Action::UnMark => fm_state.unmark_current(),
-            Action::Quit => {
-                fm_state.exit();
-                None
-            }
-            Action::MarkAll => {
-                fm_state.mark_all();
-                None
-            }
-            Action::UnMarkAll => {
-                fm_state.unmark_all();
-                None
-            }
-            Action::Jump(pathb) => fm_state.jump_to(pathb.to_path_buf()),
-            Action::ToggleFilter(filter) => {
-                fm_state.toggle_filter(filter);
-                None
-            }
-            Action::DoSortBy(sortby) => {
-                fm_state.set_sortby(sortby.clone());
-                None
-            }
-            Action::ShellCmd(cmd) => {
-                fm_state.execute_cmd(cmd.to_string());
-                None
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Keybind {
-    // to allow for leader keys, the actual keycombination is a vector
-    pub keys: Vec<Key>,
-    pub action: Action,
-}
-
-impl Keybind {
-    pub fn from(keys: Vec<Key>, action: Action) -> Option<Self> {
-        Some(Keybind { keys, action })
-    }
-}
-
-pub struct KeyState {
-    // TODO make use of 'pressed' and add support for leaderkeys
-    pressed: Vec<Key>,
-    config: Config,
-    pub number_tracker: usize, // number tracker so that '12 x' does x 12 times
-}
-
-impl KeyState {
-    pub fn new(config: Config) -> Self {
-        Self {
-            pressed: Vec::new(),
-            config: config,
-            number_tracker: 0,
-        }
-    }
-
-    pub fn press(&mut self, key: Key) -> Option<Vec<Action>> {
-        // TODO number_tracker is not as clean as it maybe Acould be
-        self.pressed.clear();
-        self.pressed.push(key);
-        let mut action_opt: Option<Vec<Action>> = None;
-        // check if the key is a number, inc the number_tracker and return
-        if let Key::Char(num) = key {
-            let nums = vec!['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-            if nums.iter().any(|ele| ele == &num) {
-                if self.number_tracker != 1 {
-                    self.number_tracker *= 10;
-                }
-                // 48 is ascii offset for numbers
-                self.number_tracker += num as usize - 48;
-                return None;
-            }
-        }
-        // compare the key to each keybind, find the corresponding action
-        // add the action as often as number_tracker says to
-        for keybind in self.config.keybindings.clone() {
-            if keybind.keys.len() == 1 && keybind.keys.get(0)? == &key {
-                let mut actions = Vec::new();
-                while self.number_tracker > 1 {
-                    actions.push(keybind.action.clone());
-                    self.number_tracker -= 1;
-                }
-                self.number_tracker = 0;
-                actions.push(keybind.action.clone());
-                action_opt = Some(actions);
-            }
-        }
-        action_opt
-    }
-}
+// The filter struct, the sortby struct and some helper function can be found here
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Filter {
@@ -137,7 +14,7 @@ impl Filter {
             Filter::Dotfiles => {
                 if let Some(filename) = pathb.file_name() {
                     if let Some(filename) = filename.to_str() {
-                        filename.starts_with(".")
+                        filename.starts_with('.')
                     } else {
                         false
                     }
@@ -147,11 +24,76 @@ impl Filter {
             }
         }
     }
+
+    pub fn filter(&self, mut list: Vec<PathBuf>) -> Vec<PathBuf> {
+        match self {
+            Filter::Dotfiles => list.retain(|ele| !Filter::Dotfiles.is(ele.to_path_buf())),
+        }
+        list
+    }
 }
+
+// TODO: Every element should have a boolean field
+// that says whether to sort by increasing or decreasing
+// as to prevent doubling all element with an Inc and Dec version
 
 #[derive(Debug, Clone)]
 pub enum SortBy {
     LexioInc,
     LexioDec,
-    // TODO New,
+    New,
+}
+
+impl SortBy {
+    pub fn sort(&self, mut list: Vec<PathBuf>) -> Vec<PathBuf> {
+        list.sort_by(match self {
+            SortBy::LexioInc => |x: &PathBuf, y: &PathBuf| {
+                x.to_str()
+                    .unwrap()
+                    .partial_cmp(&y.to_str().unwrap())
+                    .unwrap()
+            },
+            SortBy::LexioDec => |x: &PathBuf, y: &PathBuf| {
+                y.to_str()
+                    .unwrap()
+                    .partial_cmp(&x.to_str().unwrap())
+                    .unwrap()
+            },
+            SortBy::New => {
+                |x: &PathBuf, y: &PathBuf| get_modified(y).partial_cmp(&get_modified(x)).unwrap()
+            }
+        });
+        list
+    }
+}
+
+// some usefull helper functions
+
+pub fn get_size(pathb: Option<PathBuf>) -> String {
+    match pathb {
+        Some(pathbuf) => match std::fs::metadata(pathbuf) {
+            Ok(metadata) => {
+                if metadata.is_dir() {
+                    return String::from("dir");
+                }
+                match metadata.len() {
+                    0..=1000 => metadata.len().to_string() + "B",
+                    1001..=1000000 => (metadata.len() / 1000).to_string() + "KB",
+                    1000001..=1000000000 => (metadata.len() / 1000000).to_string() + "MB",
+                    _ => String::from("very large"),
+                }
+            }
+            Err(_) => String::from("no metadata found"),
+        },
+        None => String::from(""),
+    }
+}
+
+pub fn get_modified(pathb: &PathBuf) -> Option<u64> {
+    let metadata = std::fs::metadata(pathb).ok()?;
+    let systime = metadata.modified().ok()?;
+    match systime.duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(n) => Some(n.as_secs()),
+        Err(_) => Some(0),
+    }
 }

@@ -2,11 +2,13 @@ use std::path::{Path, PathBuf};
 use termion::event::Key;
 use toml::Value;
 
-use crate::util::{Action, Filter, Keybind, SortBy};
+use crate::keys::{Action, Keybind};
+use crate::util::{Filter, SortBy};
 
 // The config struct is the singleton to handle the user configuration.
 // Currently it holds only the keybinding but it can be extended to
 // cosmetic and other components
+// Other than that, all functions to parse the config file are here
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -39,7 +41,7 @@ impl Config {
 }
 
 fn get_config_string() -> Option<String> {
-    // TODO add different (not hard-coded) config paths to search for
+    // TODO add different (not hard-coded) config paths  search for
     // this is a temporary solution but should work on most systems
     let cu_exe = std::env::current_exe().ok()?;
     let mut path = Path::new(&cu_exe);
@@ -79,9 +81,9 @@ fn parse_one_jump_keybind(t: &Value) -> Option<Keybind> {
     Keybind::from(keys, Action::Jump(pathb))
 }
 
-fn parse_keys(keys: &String) -> Option<Vec<Key>> {
+fn parse_keys(keys: &str) -> Option<Vec<Key>> {
     // TODO add support for parsing command bindings
-    let keys_strs = keys.split(" ");
+    let keys_strs = keys.split(' ');
     let mut keys: Vec<Key> = Vec::new();
 
     for key_str in keys_strs {
@@ -89,7 +91,7 @@ fn parse_keys(keys: &String) -> Option<Vec<Key>> {
         let key = parse_one_key(&key_str.to_string())?;
         keys.push(key);
     }
-    if keys.len() == 0 {
+    if keys.is_empty() {
         None // if no single key could be parsed, the keybind is invalid
     } else {
         Some(keys)
@@ -97,7 +99,7 @@ fn parse_keys(keys: &String) -> Option<Vec<Key>> {
 }
 
 // parses one keybind expression for example 'C-f'
-fn parse_one_key(key: &String) -> Option<Key> {
+fn parse_one_key(key: &str) -> Option<Key> {
     // TODO support for keybinds like 'control + up', probably niche anyway
     match key.to_lowercase().as_str() {
         "backspace" => Some(Key::Backspace),
@@ -122,11 +124,10 @@ fn parse_one_key(key: &String) -> Option<Key> {
                     if first_char != 'f' && first_char != 'F' {
                         None
                     } else {
-                        let nums = vec!['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
                         let second_char = temp.next()?;
-                        if nums.iter().any(|ele| ele == &second_char) {
+                        if second_char.is_digit(10) {
                             // 48 is ascii offset for numbers
-                            let num = second_char as u8 - 48;
+                            let num = second_char.to_digit(10)? as u8;
                             Some(Key::F(num))
                         } else {
                             None
@@ -154,7 +155,7 @@ fn parse_one_key(key: &String) -> Option<Key> {
     }
 }
 
-fn parse_app_command(cmd: &String) -> Option<Action> {
+fn parse_app_command(cmd: &str) -> Option<Action> {
     match cmd.to_lowercase().as_str() {
         "up" => Some(Action::Up),
         "down" => Some(Action::Down),
@@ -168,11 +169,12 @@ fn parse_app_command(cmd: &String) -> Option<Action> {
         "toggledotfiles" => Some(Action::ToggleFilter(Filter::Dotfiles)),
         "sortbyinc" => Some(Action::DoSortBy(SortBy::LexioInc)),
         "sortbydec" => Some(Action::DoSortBy(SortBy::LexioDec)),
+        "sortbynew" => Some(Action::DoSortBy(SortBy::New)),
         _ => None,
     }
 }
 
-fn parse_jump_command(jmp: &String) -> Option<PathBuf> {
+fn parse_jump_command(jmp: &str) -> Option<PathBuf> {
     let home_dir = std::env::var("HOME").ok()?;
     let home_dir = home_dir.as_str();
     let mut jmp = jmp.replace("~", home_dir);

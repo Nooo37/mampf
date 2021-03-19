@@ -1,17 +1,23 @@
-mod tui;
-mod state;
-mod util;
-mod config;
+pub mod config;
+pub mod fm_state;
+pub mod keys;
+pub mod state;
+pub mod ui;
+pub mod util;
+
 use config::Config;
-use state::FMState;
-use util::KeyState;
+use state::State;
+use ui::terminal_ui::TerminalUI;
+use ui::UI;
 
 pub fn main() -> Result<(), std::io::Error> {
-    let fm_state = FMState::new();
     let config = Config::new().expect("Coudln't parse config file.");
-    let ks = KeyState::new(config.clone());
-    tui::main(fm_state, ks)?;
-    // println!("{:?}", config);
+    let mut state = State::from(config);
+    let mut mytui: TerminalUI = TerminalUI::init().expect("Couldn't initalize TUI backend");
+    while !state.is_exit() {
+        mytui.refresh(&state).expect("Couldn't refresh");
+        let keypress = mytui.get_next_keypress();
+        state.handle_keybinds(keypress.expect("Couldn't unwrap keybind"));
+    }
     Ok(())
 }
-
