@@ -2,6 +2,17 @@ use std::{path::PathBuf, time::SystemTime};
 
 // The filter struct, the sortby struct and some helper function can be found here
 
+#[derive(Debug, Clone)]
+pub enum Style {
+    Red,
+    Yellow,
+    Green,
+    Blue,
+    Magenta,
+    Black,
+    Gray,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Filter {
     Dotfiles,
@@ -26,9 +37,7 @@ impl Filter {
     }
 
     pub fn filter(&self, mut list: Vec<PathBuf>) -> Vec<PathBuf> {
-        match self {
-            Filter::Dotfiles => list.retain(|ele| !Filter::Dotfiles.is(ele.to_path_buf())),
-        }
+        list.retain(|ele| !self.is(ele.to_path_buf()));
         list
     }
 }
@@ -65,6 +74,14 @@ impl SortBy {
         });
         list
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum PaneContent {
+    DirElements(Vec<(PathBuf, Style)>),
+    Text(String),
+    Image(PathBuf),
+    None,
 }
 
 // some usefull helper functions

@@ -1,22 +1,25 @@
-use termion::event::Key;
-
-use crate::fm_state::FMState;
 use crate::{config::Config, keys::Action};
+use crate::{
+    fm_state::FMState,
+    util::{PaneContent, Style},
+};
+use std::path::PathBuf;
+use termion::event::Key;
 
 // State should hold all information to recreate a session
 // Tabbing will be a Vector of FMStates in the future
 // Might currently look like a wrapper around FMState + KeyState
 
-pub struct State {
+pub struct App {
     fm_state: FMState,
     keystate: KeyState,
     // TODO implement tabbing: switch to vector
     config: Config,
 }
 
-impl State {
-    pub fn from(config: Config) -> State {
-        State {
+impl App {
+    pub fn from(config: Config) -> Self {
+        Self {
             fm_state: FMState::new(),
             config: config.clone(),
             keystate: KeyState::new(config),
@@ -83,16 +86,33 @@ impl State {
         &self.fm_state
     }
 
-    pub fn list_current(&self) -> Vec<std::path::PathBuf> {
+    pub fn list_current(&self) -> Vec<PathBuf> {
         self.fm_state.list_current()
     }
 
-    pub fn list_next(&self) -> Vec<std::path::PathBuf> {
+    pub fn list_next(&self) -> Vec<PathBuf> {
         self.fm_state.list_next()
     }
 
-    pub fn list_prev(&self) -> Vec<std::path::PathBuf> {
+    pub fn list_prev(&self) -> Vec<PathBuf> {
         self.fm_state.list_prev()
+    }
+
+    pub fn get_preview(&self) -> PaneContent {
+        if let Some(focused_pathb) = &self.fm_state.get_focused() {
+            if focused_pathb.is_dir() {
+                PaneContent::DirElements(
+                    FMState::list(focused_pathb)
+                        .iter()
+                        .map(|x| (x.to_path_buf(), Style::Red))
+                        .collect::<Vec<(PathBuf, Style)>>(),
+                )
+            } else {
+                PaneContent::None
+            }
+        } else {
+            PaneContent::None
+        }
     }
 
     pub fn update_by_idx(&mut self, idx: Option<usize>) {

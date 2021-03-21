@@ -1,6 +1,6 @@
 use crate::ui::UI;
 use crate::util::{get_size, Filter};
-use crate::{fm_state::FMState, state::State};
+use crate::{app::App, fm_state::FMState};
 use std::{io::Stdout, path::PathBuf};
 use termion::{
     event::Key,
@@ -40,15 +40,13 @@ impl UI for TerminalUI {
         })
     }
 
-    fn get_user_input(&mut self, state: &State, question: &str) -> Result<String, std::io::Error> {
+    fn get_user_input(&mut self, state: &App, question: &str) -> Result<String, std::io::Error> {
         let mut input = question.to_string();
         loop {
-            if let Some(keypress) = self.get_next_keypress() {
-                match keypress {
-                    Key::Char(c) => input += &c.to_string(),
-                    Key::Backspace => break,
-                    _ => {}
-                }
+            match self.get_next_keypress() {
+                Key::Char(c) => input += &c.to_string(),
+                Key::Backspace => break,
+                _ => {}
             }
             self.input_state = Some(input.clone());
             self.refresh(state)?;
@@ -57,17 +55,17 @@ impl UI for TerminalUI {
         Ok(input)
     }
 
-    fn get_next_keypress(&mut self) -> Option<Key> {
+    fn get_next_keypress(&mut self) -> Key {
         let stdin = std::io::stdin();
         for keypress in stdin.keys() {
             if let Ok(keypress) = keypress {
-                return Some(keypress);
+                return keypress;
             }
         }
-        None
+        Key::Null
     }
 
-    fn refresh(&mut self, state: &State) -> Result<(), std::io::Error> {
+    fn refresh(&mut self, state: &App) -> Result<(), std::io::Error> {
         let pane = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Plain)
