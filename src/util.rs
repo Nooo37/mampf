@@ -3,10 +3,11 @@ use std::{path::PathBuf, time::SystemTime};
 // The filter struct, the sortby struct and some helper function can be found here
 
 #[derive(Debug, Clone)]
-pub enum Style {
+pub enum EntryStyle {
     Red,
     Yellow,
     Green,
+    Cyan,
     Blue,
     Magenta,
     Black,
@@ -78,7 +79,7 @@ impl SortBy {
 
 #[derive(Debug, Clone)]
 pub enum PaneContent {
-    DirElements(Vec<(PathBuf, Style)>),
+    DirElements(Vec<(PathBuf, EntryStyle)>),
     Text(String),
     Image(PathBuf),
     None,

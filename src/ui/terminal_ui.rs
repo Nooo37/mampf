@@ -1,6 +1,8 @@
-use crate::ui::UI;
-use crate::util::{get_size, Filter};
-use crate::{app::App, fm_state::FMState};
+use crate::{
+    app::App,
+    ui::UI,
+    util::{get_size, EntryStyle, PaneContent},
+};
 use std::{io::Stdout, path::PathBuf};
 use termion::{
     event::Key,
@@ -9,11 +11,11 @@ use termion::{
     screen::AlternateScreen,
 };
 use tui::{
-    backend::TermionBackend,
-    layout::{Alignment, Constraint, Direction, Layout},
+    backend::{Backend, TermionBackend},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     widgets::{Block, BorderType, Borders, List, ListState, Paragraph, Text},
-    Terminal,
+    Frame, Terminal,
 };
 
 pub struct TerminalUI {
@@ -62,6 +64,8 @@ impl UI for TerminalUI {
                 return keypress;
             }
         }
+        // The function will be stuck in the loop until a key is pressed.
+        // This return statement shouldn't come into play
         Key::Null
     }
 
@@ -78,15 +82,11 @@ impl UI for TerminalUI {
 
         self.liststate.select(state.get_idx());
 
-        let _items = Self::get_text_list(state.get_current_fm_state(), state.list_current());
-        let _prevs = Self::get_text_list(state.get_current_fm_state(), state.list_prev());
-        let _nexts = Self::get_text_list(state.get_current_fm_state(), state.list_next());
         let text = if let Some(input) = &self.input_state {
             input.clone()
         } else {
             get_size(state.get_current_fm_state().get_focused())
         };
-        let preview = state.get_current_fm_state().get_preview();
         let mut listwid = self.liststate.clone();
 
         self.terminal.draw(|mut f| {
@@ -108,80 +108,82 @@ impl UI for TerminalUI {
                 )
                 .split(horizontal_split[0]);
 
-            let list = Self::create_list_widget(_items.clone(), pane);
-            let prevs_list = Self::create_list_widget(_prevs.clone(), pane);
-            let nexts_list = Self::create_list_widget(_nexts.clone(), pane);
-
-            if let Some(content) = preview {
-                let huhu = [Text::raw(content)];
-                let thing = Paragraph::new(huhu.iter()).block(pane);
-                f.render_widget(thing, vertical_split[2]);
-            } else {
-                f.render_widget(nexts_list, vertical_split[2]);
-            }
             let info_text = Text::raw(text);
             let text_arr = [info_text];
             let info_box = Paragraph::new(text_arr.iter())
                 .block(textpane)
                 .alignment(Alignment::Right)
                 .wrap(false);
-
-            f.render_widget(prevs_list, vertical_split[0]);
-            f.render_stateful_widget(list, vertical_split[1], &mut listwid);
-
             f.render_widget(info_box, horizontal_split[1]);
+            if let Some(list) = Self::create_current_widget(state.get_content_middle(), pane) {
+                f.render_stateful_widget(list, vertical_split[1], &mut listwid);
+            }
+            Self::render_content(&mut f, state.get_content_right(), vertical_split[2], pane);
+            Self::render_content(&mut f, state.get_content_left(), vertical_split[0], pane);
         })?;
         Ok(())
     }
 }
 
+// Some helper functions to move a chunk of the widgeting out of the refre
+
 impl TerminalUI {
-    fn get_text_list(fm_state: &FMState, init: Vec<PathBuf>) -> Vec<Text<'static>> {
-        let mut list = Vec::new();
-        for dir in init {
-            let text = Self::get_style(&fm_state, &dir);
-            list.push(text);
+    fn render_content<B: Backend>(f: &mut Frame<B>, content: PaneContent, rect: Rect, pane: Block) {
+        match content {
+            PaneContent::DirElements(ele_vec) => {
+                let list = List::new(ele_vec.iter().map(|x| Self::translate_style(&x.0, &x.1)))
+                    .block(pane);
+                f.render_widget(list, rect);
+            }
+            PaneContent::Text(text) => {
+                let text = Text::raw(text);
+                let arr = [text];
+                let para = Paragraph::new(arr.iter()).block(pane);
+                f.render_widget(para, rect);
+            }
+            _ => {
+                f.render_widget(pane, rect);
+            }
         }
-        list
     }
 
-    fn create_list_widget(
-        text_list: Vec<Text<'static>>,
+    fn create_current_widget(
+        content: PaneContent,
         pane: Block<'static>,
-    ) -> List<'static, std::vec::IntoIter<Text<'static>>> {
-        List::new(text_list.clone().into_iter())
-            .block(pane)
-            .style(Style::default().fg(Color::Blue))
-            .highlight_symbol(" >")
-            .highlight_style(Style::default().fg(Color::Red).modifier(Modifier::BOLD))
+    ) -> Option<List<'static, std::vec::IntoIter<Text<'static>>>> {
+        match content {
+            PaneContent::DirElements(ele_vec) => Some(
+                List::new(
+                    ele_vec
+                        .iter()
+                        .map(|x| Self::translate_style(&x.0, &x.1))
+                        .collect::<Vec<Text>>()
+                        .into_iter(),
+                )
+                .block(pane)
+                .style(Style::default().fg(Color::Blue))
+                .highlight_symbol(" > ")
+                .highlight_style(Style::default().fg(Color::Red).modifier(Modifier::BOLD)),
+            ),
+            _ => None,
+        }
     }
 
-    fn get_style(fm_state: &FMState, pathb: &PathBuf) -> Text<'static> {
+    fn translate_style(pathb: &PathBuf, style: &EntryStyle) -> Text<'static> {
         let mut filename = pathb
             .file_name()
             .unwrap()
             .to_os_string()
             .into_string()
             .unwrap();
-        filename = String::from(" ") + filename.as_str();
-        if &fm_state.get_currentdir() == pathb {
-            // if path is parent dir of the current dir
-            Text::styled(
-                filename,
-                Style::default().fg(Color::Red).modifier(Modifier::BOLD),
-            )
-        } else if fm_state.is_marked(pathb.to_path_buf()) {
-            // if path is marked
-            Text::styled(filename, Style::default().fg(Color::Yellow))
-        } else if Filter::Dotfiles.is((&pathb).to_path_buf()) {
-            // if path is dotfile
-            Text::styled(filename, Style::default().fg(Color::DarkGray))
-        } else if pathb.as_path().is_dir() {
-            // if path is a dir
-            Text::styled(filename, Style::default().fg(Color::Cyan))
-        } else {
-            // if path is a normal file
-            Text::styled(filename, Style::default().fg(Color::Blue))
+        filename = String::from(" ") + filename.as_str(); // cheap trick to get some padding to the left of the lists
+        match style {
+            // Not complete yet, there might be a change once more customization is introduced
+            EntryStyle::Red => Text::styled(filename, Style::default().fg(Color::Red)),
+            EntryStyle::Blue => Text::styled(filename, Style::default().fg(Color::Blue)),
+            EntryStyle::Yellow => Text::styled(filename, Style::default().fg(Color::Yellow)),
+            EntryStyle::Cyan => Text::styled(filename, Style::default().fg(Color::Cyan)),
+            _ => Text::styled(filename, Style::default()),
         }
     }
 }

@@ -247,6 +247,10 @@ impl FMState {
         self.focused.clone()
     }
 
+    pub fn get_marked(&self) -> Vec<PathBuf> {
+        self.marked.clone()
+    }
+
     // the following functions are to support executing shell commands
 
     pub fn execute_cmd(&self, mut cmd: String) -> Option<()> {
