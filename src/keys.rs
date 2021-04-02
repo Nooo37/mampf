@@ -23,6 +23,7 @@ pub enum Action {
     ToggleFilter(Filter),
     DoSortBy(SortBy),
     ShellCmd(String),
+    TUICmd(String),
 }
 
 #[derive(Debug, Clone)]
@@ -74,8 +75,7 @@ impl KeyState {
         // add the action as often as number_tracker says to
         // temporary solution since it doesn't support leader keys yet
         for keybind in self.config.keybindings.clone() {
-            if keybind.keys.len() == 1 && keybind.keys.get(0).unwrap_or_else(|| &Key::Null) == &key
-            {
+            if keybind.keys.len() == 1 && keybind.keys.get(0).unwrap_or(&Key::Null) == &key {
                 // let mut actions = Vec::new();
                 while self.number_tracker > 1 {
                     actions.push(keybind.action.clone());

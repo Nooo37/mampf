@@ -1,7 +1,7 @@
 use crate::{
     config::Config,
     fm_state::FMState,
-    util::{EntryStyle, PaneContent},
+    util::{EntryStyle, PaneContent, PaneRole},
 };
 use std::path::PathBuf;
 
@@ -20,7 +20,7 @@ impl App {
     pub fn from(config: Config) -> Self {
         Self {
             fm_state: FMState::new(),
-            config: config.clone(),
+            config,
         }
     }
 
@@ -40,29 +40,29 @@ impl App {
         self.fm_state.list_next()
     }
 
-    pub fn list_prev(&self) -> Vec<PathBuf> {
-        self.fm_state.list_prev()
+    pub fn list_prev(&self, depth: u8) -> Vec<PathBuf> {
+        self.fm_state.list_prev(depth)
     }
 
     pub fn get_style(&self, pathb: &PathBuf) -> (PathBuf, EntryStyle) {
-        // TODO: distinguish directories etc
         let mut style = EntryStyle::Blue;
-        if let Some(focused_path) = self.fm_state.get_focused() {
-            if &focused_path == pathb {
-                style = EntryStyle::Red;
-            }
-        }
         if pathb.is_dir() {
-            if pathb == &self.fm_state.get_currentdir() {
-                style = EntryStyle::Red;
-            } else {
-                style = EntryStyle::Cyan;
-            }
+            style = EntryStyle::Cyan;
         }
         if self.fm_state.get_marked().contains(pathb) {
             style = EntryStyle::Yellow;
         }
+        if self.is_ancestor(pathb) {
+            style = EntryStyle::Red;
+        }
         (pathb.to_path_buf(), style)
+    }
+
+    fn is_ancestor(&self, path: &PathBuf) -> bool {
+        self.fm_state
+            .get_currentdir()
+            .ancestors()
+            .any(|x| x.to_path_buf() == *path)
     }
 
     pub fn get_content_middle(&self) -> PaneContent {
@@ -75,10 +75,10 @@ impl App {
         )
     }
 
-    pub fn get_content_left(&self) -> PaneContent {
+    pub fn get_content_prev(&self, depth: u8) -> PaneContent {
         PaneContent::DirElements(
             self.fm_state
-                .list_prev()
+                .list_prev(depth)
                 .iter()
                 .map(|x| self.get_style(&x))
                 .collect::<Vec<(PathBuf, EntryStyle)>>(),
@@ -103,6 +103,14 @@ impl App {
             }
         } else {
             PaneContent::None
+        }
+    }
+
+    pub fn get_content(&self, role: PaneRole) -> PaneContent {
+        match role {
+            PaneRole::Current => self.get_content_middle(),
+            PaneRole::Preview => self.get_content_right(),
+            PaneRole::Previous(depth) => self.get_content_prev(depth),
         }
     }
 

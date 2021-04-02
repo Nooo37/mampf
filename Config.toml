@@ -25,6 +25,7 @@ cmd = [
      ["C-q", "trash-put %D/%F"],   # trash-put all marked files
      ["C-v", "cp %D/%F %d"],      # copy all marked files into the current dir
      ["C-m", "mv %D/%F %d"],      # move all marked files inot the current dir
+     ["C-r", "rename %d/%f %d/%i %d/%f"],    # open the current file (currently freezes the app)
      ["M-r", "xdg-open %d/%f"],    # open the current file (currently freezes the app)
 ]
 jmp = [

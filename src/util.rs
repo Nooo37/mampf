@@ -78,6 +78,19 @@ impl SortBy {
 }
 
 #[derive(Debug, Clone)]
+pub struct PaneConfig {
+    pub role: PaneRole,
+    pub width: u8,
+}
+
+#[derive(Debug, Clone)]
+pub enum PaneRole {
+    Previous(u8),
+    Current,
+    Preview,
+}
+
+#[derive(Debug, Clone)]
 pub enum PaneContent {
     DirElements(Vec<(PathBuf, EntryStyle)>),
     Text(String),

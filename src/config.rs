@@ -2,8 +2,11 @@ use std::path::{Path, PathBuf};
 use termion::event::Key;
 use toml::Value;
 
-use crate::keys::{Action, Keybind};
 use crate::util::{Filter, SortBy};
+use crate::{
+    keys::{Action, Keybind},
+    util::{PaneConfig, PaneRole},
+};
 
 // The config struct is the singleton to handle the user configuration.
 // Currently it holds only the keybinding but it can be extended to
@@ -13,6 +16,7 @@ use crate::util::{Filter, SortBy};
 #[derive(Debug, Clone)]
 pub struct Config {
     pub keybindings: Vec<Keybind>,
+    pub panes: Vec<PaneConfig>,
 }
 
 impl Config {
@@ -36,7 +40,31 @@ impl Config {
                 keybindings.push(keybind);
             }
         }
-        Some(Config { keybindings })
+        // TODO: Do some actual config options for these two new features
+        let panes = vec![
+            PaneConfig {
+                role: PaneRole::Previous(2),
+                width: 10,
+            },
+            PaneConfig {
+                role: PaneRole::Previous(1),
+                width: 15,
+            },
+            PaneConfig {
+                role: PaneRole::Current,
+                width: 25,
+            },
+            PaneConfig {
+                role: PaneRole::Preview,
+                width: 50,
+            },
+        ];
+        let vim_bind = Keybind {
+            keys: vec![Key::Char('v')],
+            action: Action::TUICmd("nvim".to_string()),
+        };
+        keybindings.push(vim_bind);
+        Some(Config { keybindings, panes })
     }
 }
 

@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use crate::util::{Filter, SortBy};
 
@@ -172,13 +171,9 @@ impl FMState {
         self.order(&mut a)
     }
 
-    pub fn list_prev(&self) -> Vec<PathBuf> {
-        if let Some(parent) = self.current_dir.parent() {
-            let mut a = Self::list(&parent.to_path_buf());
-            self.order(&mut a)
-        } else {
-            Vec::new()
-        }
+    pub fn list_prev(&self, depth: u8) -> Vec<PathBuf> {
+        let mut list = Self::list_previous(&self.current_dir, depth);
+        self.order(&mut list)
     }
 
     pub fn list_next(&self) -> Vec<PathBuf> {
@@ -196,6 +191,21 @@ impl FMState {
 
     pub fn get_preview(&self) -> Option<String> {
         std::fs::read_to_string(self.focused.as_ref()?).ok()
+    }
+
+    pub fn list_previous(path: &PathBuf, depth: u8) -> Vec<PathBuf> {
+        if path.exists() && path.is_dir() {
+            if depth == 0 {
+                Self::list(path)
+            } else {
+                match path.parent() {
+                    Some(parent_path) => Self::list_previous(&parent_path.to_path_buf(), depth - 1),
+                    None => Vec::new(),
+                }
+            }
+        } else {
+            Vec::new()
+        }
     }
 
     pub fn list(directory_path: &PathBuf) -> Vec<PathBuf> {
@@ -252,59 +262,4 @@ impl FMState {
     }
 
     // the following functions are to support executing shell commands
-
-    pub fn execute_cmd(&self, mut cmd: String) -> Option<()> {
-        let commands = self.format_command(&mut cmd)?;
-        for command in commands {
-            Self::execute_one_cmd(&command);
-        }
-        // TODO self.update_marked()
-        Some(())
-    }
-
-    fn format_command(&self, cmd: &mut String) -> Option<Vec<String>> {
-        let mut commands = Vec::new();
-        let mut new_cmd = String::new();
-        match &self.focused {
-            Some(focused_pathb) => {
-                let filename = focused_pathb.file_name()?.to_str()?;
-                new_cmd = cmd
-                    .replace("%f", filename)
-                    .replace("%a", focused_pathb.to_str()?);
-            }
-            None => {
-                if cmd.contains("%f") || cmd.contains("%d") {
-                    return None;
-                }
-            }
-        }
-        let directory = self.current_dir.to_str()?;
-        new_cmd = new_cmd.replace("%d", directory);
-        if new_cmd.contains("%F") || new_cmd.contains("%D") {
-            for marked_path in self.marked.iter() {
-                let filename = marked_path.file_name()?.to_str()?;
-                let directory = marked_path.parent()?.to_str()?;
-                let temp_cmd = new_cmd.replace("%F", filename).replace("%D", directory);
-                commands.push(temp_cmd);
-            }
-        } else {
-            commands.push(new_cmd);
-        }
-        Some(commands)
-    }
-
-    fn execute_one_cmd(cmd: &str) -> Option<()> {
-        // TODO more parsing needed to allow for grouping everything in parens
-        // into one arg. Currently 'notify-send 'for example'' would parse 'for
-        // and example' into two args
-        let split = cmd.split(' ');
-        let mut parts = split.collect::<Vec<&str>>();
-        parts.reverse();
-        let main = parts.pop()?;
-        parts.reverse();
-        let mut cmd_temp = Command::new(main);
-        let command = cmd_temp.args(parts.iter());
-        let _output = command.output().ok()?;
-        Some(())
-    }
 }

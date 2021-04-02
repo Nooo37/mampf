@@ -1,14 +1,14 @@
 use crate::{
     app::App,
     ui::UI,
-    util::{get_size, EntryStyle, PaneContent},
+    util::{get_size, EntryStyle, PaneContent, PaneRole},
 };
 use std::{io::Stdout, path::PathBuf};
 use termion::{
     event::Key,
     input::TermRead,
     raw::{IntoRawMode, RawTerminal},
-    screen::AlternateScreen,
+    screen::{AlternateScreen, ToAlternateScreen, ToMainScreen},
 };
 use tui::{
     backend::{Backend, TermionBackend},
@@ -43,14 +43,24 @@ impl UI for TerminalUI {
     }
 
     fn get_user_input(&mut self, state: &App, question: &str) -> Result<String, std::io::Error> {
-        let mut input = question.to_string();
+        let mut input = String::new();
+        self.input_state = Some(question.to_string());
+        self.refresh(state)?;
         loop {
             match self.get_next_keypress() {
-                Key::Char(c) => input += &c.to_string(),
-                Key::Backspace => break,
+                Key::Char(c) => {
+                    if c == '\n' {
+                        break;
+                    } else {
+                        input += &c.to_string()
+                    }
+                }
+                Key::Backspace => {
+                    input.pop();
+                }
                 _ => {}
             }
-            self.input_state = Some(input.clone());
+            self.input_state = Some(question.to_string() + &input);
             self.refresh(state)?;
         }
         self.input_state = None;
@@ -80,32 +90,29 @@ impl UI for TerminalUI {
             .border_type(BorderType::Plain)
             .border_style(Style::default().fg(Color::DarkGray));
 
-        self.liststate.select(state.get_idx());
+        let mut liststate = ListState::default();
+        liststate.select(state.get_idx());
 
         let text = if let Some(input) = &self.input_state {
             input.clone()
         } else {
             get_size(state.get_current_fm_state().get_focused())
         };
-        let mut listwid = self.liststate.clone();
 
         self.terminal.draw(|mut f| {
             // TODO should probably move a good bit of widgeting out
             let horizontal_split = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Percentage(95), Constraint::Max(2)].as_ref())
+                .constraints([Constraint::Percentage(95), Constraint::Min(2)].as_ref())
                 .split(f.size());
 
+            let mut contraints = Vec::new();
+            for pane_entry in state.config.panes.iter() {
+                contraints.push(Constraint::Percentage(pane_entry.width.into()));
+            }
             let vertical_split = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints(
-                    [
-                        Constraint::Percentage(20),
-                        Constraint::Percentage(30),
-                        Constraint::Percentage(50),
-                    ]
-                    .as_ref(),
-                )
+                .constraints(contraints.as_ref())
                 .split(horizontal_split[0]);
 
             let info_text = Text::raw(text);
@@ -115,17 +122,33 @@ impl UI for TerminalUI {
                 .alignment(Alignment::Right)
                 .wrap(false);
             f.render_widget(info_box, horizontal_split[1]);
-            if let Some(list) = Self::create_current_widget(state.get_content_middle(), pane) {
-                f.render_stateful_widget(list, vertical_split[1], &mut listwid);
+            // Self::render_content(&mut f, state.get_content_right(), vertical_split[2], pane);
+            // Self::render_content(&mut f, state.get_content_left(), vertical_split[0], pane);
+            for (idx, pane_config) in state.config.panes.iter().enumerate() {
+                match &pane_config.role {
+                    PaneRole::Current => {
+                        if let Some(list) =
+                            Self::create_current_widget(state.get_content_middle(), pane)
+                        {
+                            f.render_stateful_widget(list, vertical_split[idx], &mut liststate);
+                        }
+                    }
+                    other => {
+                        Self::render_content(
+                            &mut f,
+                            state.get_content(other.clone()),
+                            vertical_split[idx],
+                            pane,
+                        );
+                    }
+                }
             }
-            Self::render_content(&mut f, state.get_content_right(), vertical_split[2], pane);
-            Self::render_content(&mut f, state.get_content_left(), vertical_split[0], pane);
         })?;
         Ok(())
     }
 }
 
-// Some helper functions to move a chunk of the widgeting out of the refre
+// Some helper functions to move a chunk of the widgeting out of the refresh function
 
 impl TerminalUI {
     fn render_content<B: Backend>(f: &mut Frame<B>, content: PaneContent, rect: Rect, pane: Block) {
@@ -185,5 +208,20 @@ impl TerminalUI {
             EntryStyle::Cyan => Text::styled(filename, Style::default().fg(Color::Cyan)),
             _ => Text::styled(filename, Style::default()),
         }
+    }
+
+    pub fn tui_app_start(&mut self) -> Result<(), std::io::Error> {
+        // right before the screen switches, the AlternateScreen is overdrawn
+        // with nothing thus forcing the TUI library to redraw the whole screen
+        // on the next draw function call
+        self.terminal.draw(|_f| {})?;
+        print!("{}", ToMainScreen);
+        Ok(())
+    }
+
+    pub fn tui_app_end(&mut self) -> Result<(), std::io::Error> {
+        print!("{}", ToAlternateScreen);
+        self.terminal.hide_cursor()?;
+        Ok(())
     }
 }
